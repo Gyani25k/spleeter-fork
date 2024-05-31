@@ -1,27 +1,32 @@
 import tempfile
 from spleeter.separator import Separator
 from spleeter.audio.adapter import AudioAdapter
-from cog import BasePredictor, Input, Path, BaseModel
+from pydub import AudioSegment
+from pathlib import Path
 
+class ModelOutput:
+    def __init__(self, vocals, accompaniment):
+        self.vocals = vocals
+        self.accompaniment = accompaniment
 
-class ModelOutput(BaseModel):
-    vocals: Path
-    accompaniment: Path
-
-
-class Predictor(BasePredictor):
-
+class Predictor:
     def setup(self):
-        """Loads Spleeter 2 stems model into memory from disk"""
         self.separator = Separator('spleeter:2stems')
-        self.audio_loader = AudioAdapter.default()
+        self.audio_loader = AudioAdapter.default()  # Initialize audio_loader here
 
     def predict(
             self,
-            audio: Path = Input(description="Audio file")
-    ) -> ModelOutput:
+            audio
+        ) -> ModelOutput:
         """Separate the vocals from the accompaniment of an audio file"""
-        waveform, sample_rate = self.audio_loader.load(str(audio))
+        
+        # Convert MP3 to WAV
+        audio_wav = AudioSegment.from_mp3(str(audio))
+        _, audio_wav_path = tempfile.mkstemp(suffix=".wav")
+        audio_wav_path = Path(audio_wav_path)
+        audio_wav.export(audio_wav_path, format="wav")
+        
+        waveform, sample_rate = self.audio_loader.load(str(audio_wav_path))
         prediction = self.separator.separate(waveform)
 
         out_path = Path(tempfile.mkdtemp())
@@ -36,3 +41,16 @@ class Predictor(BasePredictor):
             vocals=out_path_vocals,
             accompaniment=out_path_accompaniment
         )
+
+if __name__ == "__main__":
+    predictor = Predictor()
+
+    predictor.setup()
+
+    audio_mp3_path = r"C:\Users\kgyan\OneDrive\Documents\1Gen\spleeter-fork\audio_example.mp3"
+
+    output = predictor.predict(audio=audio_mp3_path)
+    print(output.vocals)
+
+    separated_vocals_path = output.vocals
+    separated_accompaniment_path = output.accompaniment
